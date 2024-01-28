@@ -1,39 +1,94 @@
-import settings
+from typing import Generator, Any
 import pytest
-import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from starlette.testclient import TestClient
+import settings
+from main import app
+import os
+import asyncio
+from db.session import get_db
+import asyncpg
 
-# Создание асинхронного движка для взаимодействия с тестовой БД
-test_engine = create_async_engine(settings.TEST_DATABASE_URL, future=True, echo=True)
 
-# Создание объекта асинхронной сессии с тестовой БД
-async_test_session = sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)
+# Создание движка для тестовой базы
+test_engine = create_async_engine(settings.TEST_DATABASE_URL, future=True, echo=False)
+
+# Создание сессии для тестовой базы
+test_async_session = sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)
 
 CLEAN_TABLES = [
-    "users"
+    "users",
 ]
 
 
+@pytest.fixture(scope="session")
+def event_loop():
+    """Создание event-loop.
+    Нужно для того, чтобы под капотом не пересоздавался постоянно event-loop.
+    """
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
 @pytest.fixture(scope="session", autouse=True)
-async def run_migration():
+async def run_migrations():
+    """Костыльное решение по созданию миграций"""
     os.system("alembic init migrations")
-    os.system('alembic revision --autogenerate -m "test running migration"')
+    os.system('alembic revision --autogenerate -m "test running migrations"')
     os.system("alembic upgrade heads")
 
 
 @pytest.fixture(scope="session")
 async def async_session_test():
-    engine = create_async_engine(create_async_engine(settings.TEST_DATABASE_URL, future=True, echo=True))
+    """Создание асинхронной сессии"""
+    engine = create_async_engine(settings.TEST_DATABASE_URL, future=True, echo=True)
     async_session = sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
     yield async_session
 
 
 @pytest.fixture(scope="function", autouse=True)
-async def clean_table(async_session_test):
-    """Очистка данных во всех таблицах перед запуском тестовой функции"""
-    async with async_session_test as session:
+async def clean_tables(async_session_test):
+    """Очистка данных перед прогоном тестов"""
+    async with async_session_test() as session:
         async with session.begin():
             for table_for_cleaning in CLEAN_TABLES:
-                await session.execute(f"""TRUNCATE TABLE {table_for_cleaning}""")
+                await session.execute(f"""TRUNCATE TABLE {table_for_cleaning};""")
 
+
+async def _get_test_db():
+    try:
+        yield test_async_session()
+    finally:
+        pass
+
+
+@pytest.fixture(scope="function")
+async def client() -> Generator[TestClient, Any, None]:
+    """
+    Создание тестового клиента и переопределение зависимости тестовой базы
+    """
+
+    app.dependency_overrides[get_db] = _get_test_db
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture(scope="session")
+async def asyncpg_pool():
+    """Создание пула соединения"""
+    pool = await asyncpg.create_pool("".join(settings.TEST_DATABASE_URL.split("+asyncpg")))
+    yield pool
+    pool.close()
+
+
+@pytest.fixture
+async def get_user_from_database(asyncpg_pool):
+    """Обертка"""
+    async def get_user_from_database_by_uuid(user_id: str):
+        """Получение пользователя по переданному id"""
+        async with asyncpg_pool.acquire() as connection:
+            return await connection.fetch("""SELECT * FROM users WHERE user_id = $1;""", user_id)
+
+    return get_user_from_database_by_uuid
