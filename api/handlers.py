@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
-from .models import UserCreate, ShowUser
+from fastapi import APIRouter, Depends, HTTPException
+from .models import UserCreate, ShowUser, DeleteUserResponse
 from db.session import get_db
 from db.dals import UserDataAccessLayer
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from typing import Union
+from uuid import UUID
 
 # Блок с роутами(путями) API
 user_router = APIRouter()
@@ -27,6 +28,22 @@ async def _create_new_user(body: UserCreate, db) -> ShowUser:
             )
 
 
+async def _delete_user(user_id, db) -> Union[UUID, None]:
+    async with db as session:
+        async with session.begin():
+            user_dal = UserDataAccessLayer(session)
+            deleted_user_id = await user_dal.delete_user(user_id=user_id)
+            return deleted_user_id
+
+
 @user_router.post("/", response_model=ShowUser)
 async def create_user(body: UserCreate, db: AsyncSession = Depends(get_db)):
     return await _create_new_user(body, db)
+
+
+@user_router.delete("/", response_model=DeleteUserResponse)
+async def delete_user(user_id: UUID, db: AsyncSession = Depends(get_db)) -> DeleteUserResponse:
+    deleted_user_id = await _delete_user(user_id, db)
+    if deleted_user_id is None:
+        raise HTTPException(status_code=404, detail=f"Пользователь с {deleted_user_id} не найден")
+    return DeleteUserResponse(deleted_user_id=deleted_user_id)

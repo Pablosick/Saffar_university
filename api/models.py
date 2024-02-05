@@ -41,3 +41,11 @@ class UserCreate(BaseModel):
         if not LETTER_MATCH_PATTERN.match(value):
             raise HTTPException(status_code=422, detail="Фамилия должно содержать только буквы")
         return value
+
+
+class DeleteUserResponse(BaseModel):
+    deleted_user_id: uuid.UUID
+
+
+# class UpdatedUserResponse(BaseModel):
+#     deleted_user_id: uuid.UUID
