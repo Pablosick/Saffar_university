@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from .models import UserCreate, ShowUser, DeleteUserResponse
+from .models import UserCreate, ShowUser, DeleteUserResponse, GetUser
 from db.session import get_db
 from db.dals import UserDataAccessLayer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +34,29 @@ async def _delete_user(user_id, db) -> Union[UUID, None]:
             user_dal = UserDataAccessLayer(session)
             deleted_user_id = await user_dal.delete_user(user_id=user_id)
             return deleted_user_id
+
+
+async def _get_user(user_id, db) -> Union[ShowUser, None]:
+    async with db as session:
+        async with session.begin():
+            user_dal = UserDataAccessLayer(session)
+            get_user_by_id = await user_dal.get_user(user_id)
+            if get_user_by_id is not None:
+                return ShowUser(
+                    user_id=get_user_by_id.id,
+                    name=get_user_by_id.name,
+                    surname=get_user_by_id.surname,
+                    email=get_user_by_id.email,
+                    is_active=get_user_by_id.is_active
+                )
+
+
+@user_router.get("/", response_model=ShowUser)
+async def get_user(body: GetUser, db: AsyncSession = Depends(get_db)):
+    user = await _get_user(body, db)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Ошибка получения данных о пользователе")
+    return user
 
 
 @user_router.post("/", response_model=ShowUser)

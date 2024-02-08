@@ -47,5 +47,7 @@ class DeleteUserResponse(BaseModel):
     deleted_user_id: uuid.UUID
 
 
+class GetUser(BaseModel):
+    user_id: uuid.UUID
 # class UpdatedUserResponse(BaseModel):
 #     deleted_user_id: uuid.UUID

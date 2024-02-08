@@ -6,6 +6,7 @@ from sqlalchemy import update, and_, select
 
 # Блок для взаимодействия с базой данных в бизнес контексте
 
+
 class UserDataAccessLayer:
     """Создание пользователей, удаление пользователей и т.д. """
 
@@ -28,3 +29,10 @@ class UserDataAccessLayer:
         deleted_user_id_row = res.fetchone()
         if deleted_user_id_row is not None:
             return deleted_user_id_row[0]
+
+    async def get_user(self, user_id: UUID) -> Union[User, None]:
+        query = select(User).where(User.user_id == user_id)
+        res = await self.db_session.execute(query)
+        get_user = res.fetchone()
+        if get_user is not None:
+            return get_user[0]
