@@ -43,7 +43,7 @@ async def _get_user(user_id, db) -> Union[ShowUser, None]:
             get_user_by_id = await user_dal.get_user(user_id)
             if get_user_by_id is not None:
                 return ShowUser(
-                    user_id=get_user_by_id.id,
+                    user_id=get_user_by_id.user_id,
                     name=get_user_by_id.name,
                     surname=get_user_by_id.surname,
                     email=get_user_by_id.email,
@@ -52,8 +52,8 @@ async def _get_user(user_id, db) -> Union[ShowUser, None]:
 
 
 @user_router.get("/", response_model=ShowUser)
-async def get_user(body: GetUser, db: AsyncSession = Depends(get_db)):
-    user = await _get_user(body, db)
+async def get_user(user_id: UUID, db: AsyncSession = Depends(get_db)):
+    user = await _get_user(user_id, db)
     if user is None:
         raise HTTPException(status_code=404, detail="Ошибка получения данных о пользователе")
     return user

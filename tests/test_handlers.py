@@ -45,3 +45,23 @@ async def test_delete_user(client, create_user_in_database, get_user_from_databa
     assert user_from_database["email"] == user_data["email"]
     assert user_from_database["is_active"] is False
     assert user_from_database["user_id"] == user_data["user_id"]
+
+
+async def test_get_user(client, create_user_in_database, get_user_from_database):
+    user_data = {
+        "user_id": uuid4(),
+        "name": "Pavelp",
+        "surname": "BochkarevP",
+        "email": "bo01814@gmail.com",
+        "is_active": True
+    }
+    await create_user_in_database(**user_data)
+    resp = client.get(f"/user/?user_id={user_data['user_id']}")
+    assert resp.status_code == 200
+    user_from_resp = resp.json()
+    assert user_from_resp["user_id"] == str(user_data["user_id"])
+    assert user_from_resp["name"] == user_data["name"]
+    assert user_from_resp["surname"] == user_data["surname"]
+    assert user_from_resp["email"] == user_data["email"]
+    assert user_from_resp["is_active"] == user_data["is_active"]
+
